@@ -202,6 +202,7 @@ def deconvolution(img_in):
     return True, img_out
 
 def Question2():
+
     # Read in input images
     input_image1 = cv2.imread(sys.argv[2], cv2.IMREAD_COLOR);
     input_image2 = cv2.imread(sys.argv[3], cv2.IMREAD_COLOR);
@@ -228,10 +229,33 @@ def Question2():
 # ===== Question 3: Laplacian pyramid blending ======
 # ===================================================
 
+def get_laplacian_pyramid(image, level):
+
+    gaussian_pyramid = []
+    laplacian_pyramid = []
+
+    # Insert first level to gaussian_pyramid
+    gaussian_pyramid.append(image.deepcopy())
+
+    # pyr down and create the gaussian_pyramid
+    for i in range(1, level+1):
+        gaussian_pyramid.append(cv2.pyrDown(gaussian_pyramid[i-1]))
+
+    # insert last level of gaussian_pyramid to laplacian_pyramid
+    laplacian_pyramid.append(gaussian_pyramid[level-1])
+
+    for i in range(level-2, 0, -1):
+        laplacian_pyramid.append(laplacian_pyramid[i])
+
+    return laplacian_pyramid
+
 def laplacian_pyramid_blending(img_in1, img_in2):
     # Write laplacian pyramid blending codes here
     img_out = img_in1  # Blending result
-
+    level = 6
+    laplacian_pyramid_in1 = get_laplacian_pyramid(img_in1, level)
+    laplacian_pyramid_in2 = get_laplacian_pyramid(img_in2, level)
+    
     return True, img_out
 
 

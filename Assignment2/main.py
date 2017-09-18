@@ -171,7 +171,7 @@ def deconvolution(img_in):
     # Write deconvolution codes here
     img_out = img_in  # Deconvolution result
 
-    # img_in = cv2.imread("blurred2.exr", cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+    img_in = cv2.imread("blurred2.exr", cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
     # convert to grayscale
     # img_in = cv2.cvtColor(img_in, cv2.COLOR_BGR2GRAY)
 
@@ -194,9 +194,10 @@ def deconvolution(img_in):
     inverse_shifted_fft_image = numpy.fft.ifftshift(image_fourier_transform_shifted)
     img_out= numpy.fft.ifft2(inverse_shifted_fft_image)
     img_out = numpy.abs(img_out)
-    img_out *= 255
 
+    # Convert floating point to array to 0-255 uint8
     if img_out.dtype != numpy.uint8:
+        img_out*=255
         img_out.astype(numpy.uint8)
 
     return True, img_out
@@ -229,35 +230,70 @@ def Question2():
 # ===== Question 3: Laplacian pyramid blending ======
 # ===================================================
 
+def crop_images(img1, img2):
+
+    crop_len = img1.shape[0]
+    img1_crop = img1[ :, :crop_len]
+    img2_crop = img2[ : crop_len, :crop_len]
+    return img1_crop, img2_crop
+
+def get_gaussian_pyramid(image, level):
+
+    gaussian_pyramid=[image]
+    for i in range(1, level):
+        downsample = cv2.pyrDown(gaussian_pyramid[i-1])
+        gaussian_pyramid.append(downsample)
+    return gaussian_pyramid
+
 def get_laplacian_pyramid(image, level):
 
-    gaussian_pyramid = []
-    laplacian_pyramid = []
+    gaussian_pyramid = get_gaussian_pyramid(image, level)
 
-    # Insert first level to gaussian_pyramid
-    gaussian_pyramid.append(image.deepcopy())
+    # smallest level is not a difference image. Hence push it ot the list
+    laplacian_pyramid = [gaussian_pyramid[level-1]]
 
-    # pyr down and create the gaussian_pyramid
-    for i in range(1, level+1):
-        gaussian_pyramid.append(cv2.pyrDown(gaussian_pyramid[i-1]))
-
-    # insert last level of gaussian_pyramid to laplacian_pyramid
-    laplacian_pyramid.append(gaussian_pyramid[level-1])
-
-    for i in range(level-2, 0, -1):
-        laplacian_pyramid.append(laplacian_pyramid[i])
-
+    for i in range(level-1, 0, -1):
+        # upsample the current level
+        upsample = cv2.pyrUp(gaussian_pyramid[i])
+        # highpass = image - low pass
+        highpass = cv2.subtract( gaussian_pyramid[i-1], upsample)
+        laplacian_pyramid.append(highpass)
     return laplacian_pyramid
 
 def laplacian_pyramid_blending(img_in1, img_in2):
     # Write laplacian pyramid blending codes here
     img_out = img_in1  # Blending result
     level = 6
-    laplacian_pyramid_in1 = get_laplacian_pyramid(img_in1, level)
-    laplacian_pyramid_in2 = get_laplacian_pyramid(img_in2, level)
-    
-    return True, img_out
 
+    img1_n, img2_n = crop_images(img_in1, img_in2)
+
+    laplacian_pyramid_img1 = get_laplacian_pyramid(img1_n, level)
+    laplacian_pyramid_img2 = get_laplacian_pyramid(img2_n, level)
+
+    # Merge two images
+    merged_images = []
+    for i in range(len(laplacian_pyramid_img1)):
+        row, col = laplacian_pyramid_img1[i].shape[0], laplacian_pyramid_img1[i].shape[1]
+        res = numpy.full_like(laplacian_pyramid_img1[i], 0)
+
+        lefthalf_mask = laplacian_pyramid_img1[i].copy()
+        righthalf_mask = laplacian_pyramid_img2[i].copy()
+
+
+        lefthalf_mask [ : , row/2 :        ] = 0
+        righthalf_mask[ :,        : row/2    ] = 0
+
+        res = righthalf_mask + lefthalf_mask
+
+        merged_images.append(res)
+
+    # # Reconstruct from pyramid
+    finalout = merged_images[0]
+    for i in range(1, level):
+        finalout = cv2.pyrUp(finalout)
+        finalout = cv2.add(finalout, merged_images[i])
+
+    return   True, finalout
 
 def Question3():
     # Read in input images

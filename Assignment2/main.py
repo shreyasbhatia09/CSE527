@@ -123,7 +123,7 @@ def low_pass_filter(img_in):
 
     # Create a mask to so that all the low freq pass but high freq are attenuated
     rows, cols= img_in.shape
-    masklen = 40
+    masklen = 20
     low_pass_mask = numpy.full_like(image_fourier_transform_shifted, 0)
     low_pass_mask[rows/2 - masklen: rows/2 + masklen, cols/2 - masklen : cols/2 + masklen ] = 1
 
@@ -142,6 +142,7 @@ def low_pass_filter(img_in):
 def high_pass_filter(img_in):
     # Write high pass filter here
     img_out = img_in  # High pass filter result
+
     # convert to grayscale
     img_in = cv2.cvtColor(img_in, cv2.COLOR_BGR2GRAY)
     # Take FFT and shift the zero frequency component (DC component) to center
@@ -170,8 +171,35 @@ def deconvolution(img_in):
     # Write deconvolution codes here
     img_out = img_in  # Deconvolution result
 
-    return True, img_out
+    # img_in = cv2.imread("blurred2.exr", cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+    # convert to grayscale
+    # img_in = cv2.cvtColor(img_in, cv2.COLOR_BGR2GRAY)
 
+    # Take FFT and shift the zero frequency component (DC component) to center
+    image_fourier_transform = numpy.fft.fft2(img_in)
+    image_fourier_transform_shifted = numpy.fft.fftshift(image_fourier_transform)
+
+    # Applying a gaussian kernel for deconvolution
+    rows, cols = img_in.shape
+    gaussian_kernel = cv2.getGaussianKernel(21, 5)
+    gaussian_kernel = gaussian_kernel*gaussian_kernel.T
+
+    fourier_gaussian = numpy.fft.fft2(gaussian_kernel, (rows, cols))
+    shifted_fourier_gaussian = numpy.fft.fftshift(fourier_gaussian)
+
+    # Apply the gaussian kernel
+    image_fourier_transform_shifted = image_fourier_transform_shifted / shifted_fourier_gaussian
+
+    # TIme to get back the image
+    inverse_shifted_fft_image = numpy.fft.ifftshift(image_fourier_transform_shifted)
+    img_out= numpy.fft.ifft2(inverse_shifted_fft_image)
+    img_out = numpy.abs(img_out)
+    img_out *= 255
+
+    if img_out.dtype != numpy.uint8:
+        img_out.astype(numpy.uint8)
+
+    return True, img_out
 
 def Question2():
     # Read in input images

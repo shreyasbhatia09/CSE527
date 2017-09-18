@@ -142,6 +142,26 @@ def low_pass_filter(img_in):
 def high_pass_filter(img_in):
     # Write high pass filter here
     img_out = img_in  # High pass filter result
+    # convert to grayscale
+    img_in = cv2.cvtColor(img_in, cv2.COLOR_BGR2GRAY)
+    # Take FFT and shift the zero frequency component (DC component) to center
+    image_fourier_transform = numpy.fft.fft2(img_in)
+    image_fourier_transform_shifted = numpy.fft.fftshift(image_fourier_transform)
+
+    # Create High pass mask which will attenuate lower freq
+    rows, cols = img_in.shape
+    masklen = 20
+    high_pass_mask = numpy.full_like(image_fourier_transform, 1)
+    high_pass_mask[rows/2 - masklen: rows/2 + masklen, cols/2 - masklen : cols/2 + masklen ] = 0
+
+    # Apply the High pass filter
+    image_fourier_transform_shifted = image_fourier_transform_shifted * high_pass_mask
+
+    # TIme to get back the image
+
+    inverse_shifted_fft_image = numpy.fft.ifftshift(image_fourier_transform_shifted)
+    img_out= numpy.fft.ifft2(inverse_shifted_fft_image)
+    img_out = numpy.abs(img_out)
 
     return True, img_out
 

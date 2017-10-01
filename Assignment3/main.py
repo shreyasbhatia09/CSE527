@@ -6,6 +6,7 @@ import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 
 def help_message():
    print("Usage: [Question_Number] [Input_Options] [Output_Options]")
@@ -114,7 +115,7 @@ def cylindricalWarpImage(img1, K, savefig=False):
     for x_cyl in np.arange(0,cyl_w):
         for y_cyl in np.arange(0,cyl_h):
             theta = (x_cyl - x_c) / f
-            h     = (y_cyl - y_c) / f
+            h      = (y_cyl - y_c) / f
 
             X = np.array([math.sin(theta), h, math.cos(theta)])
             X = np.dot(K,X)
@@ -181,52 +182,104 @@ def getTransform(src, dst, method='affine'):
 # ================ Perspective Warping ==============
 # ===================================================
 def Perspective_warping(img1, img2, img3):
-	
-	# Write your codes here
-	output_image = img1 # This is dummy output, change it to your output
-	
-	# Write out the result
-	output_name = sys.argv[5] + "output_homography.png"
-	cv2.imwrite(output_name, output_image)
-	
-	return True
-	
+
+    # Write your codes here
+    def display_image(title, img):
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL)  # Create window with freedom of dimensions
+        cv2.imshow(title, img)
+
+    output_image = img1 # This is dummy output, change it to your output
+    (pts1, pts2) = feature_matching(img1, img2)
+
+    # plt.subplot(121)
+    # plt.imshow(img1)
+    # x1,y1 = zip(*pts1)
+    # plt.scatter(x1,y1, 0.5, c='r', marker='x')
+    #
+    # x2,y2 = zip(*pts2)
+    # plt.subplot(122)
+    # plt.imshow(img2)
+    # plt.scatter(x2,y2, 0.5, c='r', marker='x')
+
+    # We need to transform image 2 and image 3 to plane of image 1
+    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1)
+    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1)
+
+    #Since we are stitching the images, we need to create a larger image to make room for all 3 images
+    img1= cv2.copyMakeBorder(img1, 200,200,500,500, cv2.BORDER_CONSTANT)
+
+    # We need to transform image 2 and image 3 to the perspective of image 1
+    outright = cv2.warpPerspective(img2, Mright, (img1.shape[1], img2.shape[0]), borderMode =cv2.BORDER_TRANSPARENT)
+    outleft = cv2.warpPerspective(img3, Mleft, (img1.shape[1], img2.shape[0]), borderMode =cv2.BORDER_TRANSPARENT)
+
+    display_image('left', outleft)
+    display_image('right', outright)
+
+
+    print img1.shape
+    print img2.shape
+    print img3.shape
+    print output_image.shape
+
+    display_image('out', output_image)
+
+    # # for example: transform im1 to im2's plane
+    # # first, make some room around im2
+    # img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
+    # # then transform im1 with the 3x3 transformation matrix
+    # # out = cv2.warpPerspective(img2, M,
+    # #                           (img2.shape[1], img1.shape[0]), dst=img1.copy(), borderMode=cv2.BORDER_TRANSPARENT)
+    # imageA =img1
+    # imageB =img2
+    # result = cv2.warpPerspective(imageA, M,
+    #                              (imageA.shape[1] + imageB.shape[1], imageA.shape[0]))
+    # result[0:imageB.shape[0], 0:imageB.shape[1]] = imageB
+
+
+
+
+    # Write out the result
+    cv2.waitKey(0)
+    output_name = sys.argv[5] + "output_homography.png"
+    cv2.imwrite(output_name, output_image)
+    return True
+
 def Bonus_perspective_warping(img1, img2, img3):
-	
-	# Write your codes here
-	output_image = img1 # This is dummy output, change it to your output
-	
-	# Write out the result
-	output_name = sys.argv[5] + "output_homography_lpb.png"
-	cv2.imwrite(output_name, output_image)
-	
-	return True
+
+    # Write your codes here
+    output_image = img1 # This is dummy output, change it to your output
+
+    # Write out the result
+    output_name = sys.argv[5] + "output_homography_lpb.png"
+    cv2.imwrite(output_name, output_image)
+
+    return True
 
 # ===================================================
 # =============== Cynlindrical Warping ==============
 # ===================================================
 def Cylindrical_warping(img1, img2, img3):
-	
-	# Write your codes here
-	output_image = img1 # This is dummy output, change it to your output
-	
-	# Write out the result
-	output_name = sys.argv[5] + "output_cylindrical.png"
-	cv2.imwrite(output_name, output_image)
-	
-	return True
+
+    # Write your codes here
+    output_image = img1 # This is dummy output, change it to your output
+
+    # Write out the result
+    output_name = sys.argv[5] + "output_cylindrical.png"
+    cv2.imwrite(output_name, output_image)
+
+    return True
 
 def Bonus_cylindrical_warping(img1, img2, img3):
-	
-	# Write your codes here
-	output_image = img1 # This is dummy output, change it to your output
-	
-	# Write out the result
-	output_name = sys.argv[5] + "output_cylindrical_lpb.png"
-	cv2.imwrite(output_name, output_image)
-	
-	return True
-	
+
+    # Write your codes here
+    output_image = img1 # This is dummy output, change it to your output
+
+    # Write out the result
+    output_name = sys.argv[5] + "output_cylindrical_lpb.png"
+    cv2.imwrite(output_name, output_image)
+
+    return True
+
 '''
 This exact function will be used to evaluate your results for HW2
 Compare your result with master image and get the difference, the grading
@@ -267,19 +320,19 @@ if __name__ == '__main__':
    else: 
       question_number = int(sys.argv[1])
       if (question_number > 4 or question_number < 1):
-	 print("Input parameters out of bound ...")
+         print("Input parameters out of bound ...")
          sys.exit()
-		 
+
    input_image1 = cv2.imread(sys.argv[2], 0)
    input_image2 = cv2.imread(sys.argv[3], 0)
-   input_image3 = cv2.imread(sys.argv[4], 0) 
+   input_image3 = cv2.imread(sys.argv[4], 0)
 
    function_launch = {
-   1 : Perspective_warping(input_image1, input_image2, input_image3),
-   2 : Cylindrical_warping(input_image1, input_image2, input_image3),
-   3 : Bonus_perspective_warping(input_image1, input_image2, input_image3),
-   4 : Bonus_cylindrical_warping(input_image1, input_image2, input_image3),
+       1: Perspective_warping(input_image1, input_image2, input_image3),
+       2: Cylindrical_warping(input_image1, input_image2, input_image3),
+       3: Bonus_perspective_warping(input_image1, input_image2, input_image3),
+       4: Bonus_cylindrical_warping(input_image1, input_image2, input_image3)
    }
 
    # Call the function
-   function_launch[question_number]()
+   function_launch[question_number]

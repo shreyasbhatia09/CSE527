@@ -201,27 +201,25 @@ def Perspective_warping(img1, img2, img3):
     # plt.imshow(img2)
     # plt.scatter(x2,y2, 0.5, c='r', marker='x')
 
-    # We need to transform image 2 and image 3 to plane of image 1
-    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1)
-    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1)
-
-    #Since we are stitching the images, we need to create a larger image to make room for all 3 images
+    # Since we are stitching the images, we need to create a larger image to make room for all 3 images
     img1= cv2.copyMakeBorder(img1, 200,200,500,500, cv2.BORDER_CONSTANT)
 
+    # We need to transform image 2 and image 3 to plane of image 1
+    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1, method= 'homography')
+    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1, method='homography')
+
+
     # We need to transform image 2 and image 3 to the perspective of image 1
-    outright = cv2.warpPerspective(img2, Mright, (img1.shape[1], img2.shape[0]), borderMode =cv2.BORDER_TRANSPARENT)
-    outleft = cv2.warpPerspective(img3, Mleft, (img1.shape[1], img2.shape[0]), borderMode =cv2.BORDER_TRANSPARENT)
+    cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]),dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
+    cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
 
-    display_image('left', outleft)
-    display_image('right', outright)
+    display_image('out',img1)
 
-
-    print img1.shape
     print img2.shape
     print img3.shape
     print output_image.shape
 
-    display_image('out', output_image)
+    display_image('out', img1)
 
     # # for example: transform im1 to im2's plane
     # # first, make some room around im2

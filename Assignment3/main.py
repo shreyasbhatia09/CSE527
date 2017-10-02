@@ -166,7 +166,7 @@ def getTransform(src, dst, method='affine'):
 
     src_pts = np.float32(pts1).reshape(-1,1,2)
     dst_pts = np.float32(pts2).reshape(-1,1,2)
-
+    
     if method == 'affine':
         M, mask = cv2.estimateAffine2D(src_pts, dst_pts, cv2.RANSAC, ransacReprojThreshold=5.0)
         M = np.append(M, [[0,0,1]], axis=0)
@@ -213,13 +213,7 @@ def Perspective_warping(img1, img2, img3):
     cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]),dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
     cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
 
-    display_image('out',img1)
 
-    print img2.shape
-    print img3.shape
-    print output_image.shape
-
-    display_image('out', img1)
 
     # # for example: transform im1 to im2's plane
     # # first, make some room around im2
@@ -234,10 +228,8 @@ def Perspective_warping(img1, img2, img3):
     # result[0:imageB.shape[0], 0:imageB.shape[1]] = imageB
 
 
-
-
+    output_image = img1
     # Write out the result
-    cv2.waitKey(0)
     output_name = sys.argv[5] + "output_homography.png"
     cv2.imwrite(output_name, output_image)
     return True
@@ -253,14 +245,51 @@ def Bonus_perspective_warping(img1, img2, img3):
 
     return True
 
+def get_cylindrical_image(img):
+    height,width = img.shape
+    f = 700
+    K = np.array([[f, 0, width/2], [0, f, height/2], [0, 0, 1]])
+    return  cylindricalWarpImage(img, K)
+
 # ===================================================
 # =============== Cynlindrical Warping ==============
 # ===================================================
 def Cylindrical_warping(img1, img2, img3):
-
     # Write your codes here
+
+    def display_image(img):
+        cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+        cv2.imshow('image', img)
+
     output_image = img1 # This is dummy output, change it to your output
 
+    img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
+    img1, mask1 = get_cylindrical_image(img1)
+    img2, mask2 = get_cylindrical_image(img2)
+    img3, mask3 = get_cylindrical_image(img3)
+
+    display_image(img1)
+
+    # We need to transform image 2 and image 3 to plane of image 1
+    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1)
+    Mright = Mright[:-1, :]
+
+    # We need to transform image 2 and image 3 to the perspective of image 1
+    img2_transformed = cv2.warpAffine(img2, Mright , (img1.shape[1], img1.shape[0]), borderMode=cv2.BORDER_TRANSPARENT)
+    img2_masked_transform = cv2.warpAffine(mask2, Mright , (img1.shape[1], img1.shape[0]), borderMode=cv2.BORDER_TRANSPARENT)
+
+    display_image(img1)
+    # img1 = img1 * (1-( img2_masked_transform/255) ) + (img2_masked_transform/255)*img2_transformed
+
+    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1)
+    Mleft = Mleft[:-1,: ]
+    cv2.warpAffine(img3, Mleft , (img1.shape[1], img1.shape[0]), dst=img1, borderMode=cv2.BORDER_TRANSPARENT)
+
+    display_image(img1)
+
+    cv2.waitKey(0)
+
+    output_image = img1
     # Write out the result
     output_name = sys.argv[5] + "output_cylindrical.png"
     cv2.imwrite(output_name, output_image)
@@ -325,12 +354,16 @@ if __name__ == '__main__':
    input_image2 = cv2.imread(sys.argv[3], 0)
    input_image3 = cv2.imread(sys.argv[4], 0)
 
+   a = cv2.imread('example_output1.png', 0)
+   b = cv2.imread('output.pngoutput_cylindrical.png', 0)
+   print RMSD(a, b )
+
    function_launch = {
-       1: Perspective_warping(input_image1, input_image2, input_image3),
-       2: Cylindrical_warping(input_image1, input_image2, input_image3),
-       3: Bonus_perspective_warping(input_image1, input_image2, input_image3),
-       4: Bonus_cylindrical_warping(input_image1, input_image2, input_image3)
+       1: Perspective_warping,
+       2: Cylindrical_warping,
+       3: Bonus_perspective_warping,
+       4: Bonus_cylindrical_warping
    }
 
    # Call the function
-   function_launch[question_number]
+   function_launch[question_number](input_image1, input_image2, input_image3)

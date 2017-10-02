@@ -257,42 +257,47 @@ def get_cylindrical_image(img):
 def Cylindrical_warping(img1, img2, img3):
     # Write your codes here
 
-    def display_image(img):
-        cv2.namedWindow('image', cv2.WINDOW_NORMAL)
-        cv2.imshow('image', img)
+    def display_image(title,img):
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL)
+        cv2.imshow(title, img)
+
+    def stitch(image1 , mask1, image2):
+        (M, pts1, pts2, mask) = getTransform(image1, image2)
+        M = M[:-1, :]
+
+        image_transformed = cv2.warpAffine(image1,
+                                            M,
+                                            (image2.shape[1], image2.shape[0]),
+                                            )
+
+        image_transformed_mask = cv2.warpAffine(mask1,
+                                                M,
+                                                (image2.shape[1], image2.shape[0]),
+                                                )
+
+        output_image = image2.copy()
+        output_image[image_transformed_mask != 0] = image_transformed[image_transformed_mask != 0]
+        return output_image
+
 
     output_image = img1 # This is dummy output, change it to your output
 
-    img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
+
     img1, mask1 = get_cylindrical_image(img1)
     img2, mask2 = get_cylindrical_image(img2)
     img3, mask3 = get_cylindrical_image(img3)
 
-    display_image(img1)
+    img1 = cv2.copyMakeBorder(img1, 50, 50, 300, 300, cv2.BORDER_CONSTANT)
 
-    # We need to transform image 2 and image 3 to plane of image 1
-    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1)
-    Mright = Mright[:-1, :]
-
-    # We need to transform image 2 and image 3 to the perspective of image 1
-    img2_transformed = cv2.warpAffine(img2, Mright , (img1.shape[1], img1.shape[0]), borderMode=cv2.BORDER_TRANSPARENT)
-    img2_masked_transform = cv2.warpAffine(mask2, Mright , (img1.shape[1], img1.shape[0]), borderMode=cv2.BORDER_TRANSPARENT)
-
-    display_image(img1)
-    # img1 = img1 * (1-( img2_masked_transform/255) ) + (img2_masked_transform/255)*img2_transformed
-
-    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1)
-    Mleft = Mleft[:-1,: ]
-    cv2.warpAffine(img3, Mleft , (img1.shape[1], img1.shape[0]), dst=img1, borderMode=cv2.BORDER_TRANSPARENT)
-
-    display_image(img1)
-
+    display_image('out1', stitch(img2, mask2, img1))
+    display_image('out2', stitch(img3, mask3, stitch(img2,mask2, img1)))
     cv2.waitKey(0)
 
-    output_image = img1
+    output_image = stitch(img3,mask3, stitch(img2,mask2, img1))
     # Write out the result
     output_name = sys.argv[5] + "output_cylindrical.png"
     cv2.imwrite(output_name, output_image)
+
 
     return True
 
@@ -353,10 +358,6 @@ if __name__ == '__main__':
    input_image1 = cv2.imread(sys.argv[2], 0)
    input_image2 = cv2.imread(sys.argv[3], 0)
    input_image3 = cv2.imread(sys.argv[4], 0)
-
-   a = cv2.imread('example_output1.png', 0)
-   b = cv2.imread('output.pngoutput_cylindrical.png', 0)
-   print RMSD(a, b )
 
    function_launch = {
        1: Perspective_warping,

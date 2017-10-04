@@ -176,7 +176,61 @@ def getTransform(src, dst, method='affine'):
     matchesMask = mask.ravel().tolist()
 
     return (M, pts1, pts2, mask)
-   
+
+# Laplacian blending with masks taken from
+# http://www.morethantechnical.com/2017/09/29/laplacian-pyramid-with-masks-in-opencv-python/
+def Laplacian_Pyramid_Blending_with_mask(A, B, m, num_levels = 6):
+    # assume mask is float32 [0,1]
+
+    # generate Gaussian pyramid for A,B and mask
+    GA = A.copy()
+    GB = B.copy()
+    GM = m.copy()
+    gpA = [GA]
+    gpB = [GB]
+    gpM = [GM]
+    for i in xrange(num_levels):
+        GA = cv2.pyrDown(GA)
+        GB = cv2.pyrDown(GB)
+        GM = cv2.pyrDown(GM)
+        gpA.append(np.float32(GA))
+        gpB.append(np.float32(GB))
+        gpM.append(np.float32(GM))
+
+    # generate Laplacian Pyramids for A,B and masks
+    lpA  = [gpA[num_levels-1]] # the bottom of the Lap-pyr holds the last (smallest) Gauss level
+    lpB  = [gpB[num_levels-1]]
+    gpMr = [gpM[num_levels-1]]
+    for i in xrange(num_levels-1,0,-1):
+        # Laplacian: subtarct upscaled version of lower level from current level
+        # to get the high frequencies
+        img_pyrup_a = cv2.pyrUp(gpA[i])
+        img1 = gpA[i-1]
+
+        img_pyrup_b = cv2.pyrUp(gpB[i])
+        img2 =gpB[i-1]
+
+        LA = np.subtract(img1, img_pyrup_a )
+        LB = np.subtract(img2, img_pyrup_b)
+        lpA.append(LA)
+        lpB.append(LB)
+        gpMr.append(gpM[i-1]) # also reverse the masks
+
+    # Now blend images according to mask in each level
+    LS = []
+    for la,lb,gm in zip(lpA,lpB,gpMr):
+        ls = la * gm + lb * (1.0 - gm)
+        LS.append(ls)
+
+    # now reconstruct
+    ls_ = LS[0]
+    print type(ls_)
+    for i in xrange(1,num_levels):
+        ls_ = cv2.pyrUp(ls_)
+        ls_ = cv2.add(ls_, LS[i])
+
+    return ls_
+
 # ===================================================
 # ================ Perspective Warping ==============
 # ===================================================
@@ -187,7 +241,7 @@ def Perspective_warping(img1, img2, img3):
         cv2.namedWindow(title, cv2.WINDOW_NORMAL)  # Create window with freedom of dimensions
         cv2.imshow(title, img)
 
-    output_image = img1 # This is dummy output, change it to your output
+    output_image = img1
     (pts1, pts2) = feature_matching(img1, img2)
 
     # Since we are stitching the images, we need to create a larger image to make room for all 3 images
@@ -199,6 +253,7 @@ def Perspective_warping(img1, img2, img3):
 
     # We need to transform image 2 and image 3 to the perspective of image 1
     cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]),dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
+
     cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
 
     output_image = img1
@@ -220,8 +275,13 @@ def Bonus_perspective_warping(img1, img2, img3):
         cv2.namedWindow(title, cv2.WINDOW_NORMAL)  # Create window with freedom of dimensions
         cv2.imshow(title, img)
 
-    output_image = img1  # This is dummy output, change it to your output
-    (pts1, pts2) = feature_matching(img1, img2)
+    def crop_images(img1, img2):
+        crop_len = img1.shape[0]
+        img1_crop = img1[:, :crop_len]
+        img2_crop = img2[: crop_len, :crop_len]
+        return img1_crop, img2_crop
+
+    output_image = img1
 
     # Since we are stitching the images, we need to create a larger image to make room for all 3 images
     img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
@@ -233,8 +293,33 @@ def Bonus_perspective_warping(img1, img2, img3):
     # We need to transform image 2 and image 3 to the perspective of image 1
     cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]), dst=img1, borderMode=cv2.BORDER_TRANSPARENT)
 
-    
+
+    im1_cropped, im2_cropped = crop_images(img1[:, img1.shape[1] / 2:], img1[:, :img1.shape[1] / 2])
+
+    mask = np.zeros_like(im1_cropped, dtype='float32')
+    mask[:, img1.shape[1]:] = 255
+    mask[:, :img1.shape[1]] = 0
+
+    display_image('1o', img1)
+
+
+    display_image('1m1', im1_cropped)
+
+    display_image('1m2', im2_cropped)
+
+    display_image('mask', mask)
+    cv2.waitKey(0)
+
+    print im1_cropped.shape
+    print im2_cropped.shape
+    print mask.shape
+
+    # img1_blended = Laplacian_Pyramid_Blending_with_mask(im1_cropped, im2_cropped, mask, 4)
+    # display_image('blend', img1_blended)
+
+
     cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst=img1, borderMode=cv2.BORDER_TRANSPARENT)
+
 
     # Write out the result
     output_name = sys.argv[5] + "output_homography_lpb.png"
@@ -271,7 +356,6 @@ def Cylindrical_warping(img1, img2, img3):
                                                 M,
                                                 (image2.shape[1], image2.shape[0]),
                                                 )
-
         output_image = image2.copy()
         output_image[image_transformed_mask != 0] = image_transformed[image_transformed_mask != 0]
         return output_image
@@ -285,25 +369,70 @@ def Cylindrical_warping(img1, img2, img3):
 
     img1 = cv2.copyMakeBorder(img1, 50, 50, 300, 300, cv2.BORDER_CONSTANT)
 
+    first_stitch = stitch(img2, mask2, img1)
+    output_image = stitch(img3, mask3, first_stitch)
+
+    # # Write out the result
+    output_name = sys.argv[5] + "output_cylindrical.png"
+    cv2.imwrite(output_name, output_image)
+    # print new_RMSD(2, output_image, cv2.imread('example_output2.png', 0))
+    return True
+
+def Bonus_cylindrical_warping(img1, img2, img3):
+
+    # Write your codes here
+    def crop_images(img1, img2):
+        crop_len = img1.shape[0]
+        img1_crop = img1[:, :crop_len]
+        img2_crop = img2[: crop_len, :crop_len]
+        return img1_crop, img2_crop
+    def display_image(title, img):
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL)
+        cv2.imshow(title, img)
+
+    def stitch(image1, mask1, image2):
+        (M, pts1, pts2, mask) = getTransform(image1, image2)
+        M = M[:-1, :]
+
+        image_transformed = cv2.warpAffine(image1,
+                                           M,
+                                           (image2.shape[1], image2.shape[0]),
+                                           )
+
+
+        image_transformed_mask = cv2.warpAffine(mask1,
+                                                M,
+                                                (image2.shape[1], image2.shape[0]),
+                                                )
+        output_image = image2.copy()
+
+
+        crop_len = output_image.shape[0]
+        output_image = output_image[:, :crop_len]
+        image_transformed = image_transformed[: crop_len, :crop_len]
+        image_transformed_mask = image_transformed_mask[: crop_len, :crop_len]
+
+        print output_image.shape, type(output_image)
+        print image_transformed.shape, type(image_transformed)
+        print image_transformed_mask.shape, type(image_transformed_mask)
+        output_image = Laplacian_Pyramid_Blending_with_mask(output_image, image_transformed, image_transformed_mask, 4)
+
+        return output_image
+
+    output_image = img1  # This is dummy output, change it to your output
+
+    img1, mask1 = get_cylindrical_image(img1)
+    img2, mask2 = get_cylindrical_image(img2)
+    img3, mask3 = get_cylindrical_image(img3)
+
+    img1 = cv2.copyMakeBorder(img1, 50, 50, 300, 300, cv2.BORDER_CONSTANT)
+
     # display_image('out1', stitch(img2, mask2, img1))
     # display_image('out2', stitch(img3, mask3, stitch(img2,mask2, img1)))
     # cv2.waitKey(0)
 
     first_stitch = stitch(img2, mask2, img1)
     output_image = stitch(img3, mask3, first_stitch)
-    # display_image('first_stitch',first_stitch)
-    # display_image('output', output_image)
-    # cv2.waitKey(0)
-    # # Write out the result
-    output_name = sys.argv[5] + "output_cylindrical.png"
-    cv2.imwrite(output_name, output_image)
-    print new_RMSD(2, output_image, cv2.imread('example_output2.png', 0))
-    return True
-
-def Bonus_cylindrical_warping(img1, img2, img3):
-
-    # Write your codes here
-    output_image = img1 # This is dummy output, change it to your output
 
     # Write out the result
     output_name = sys.argv[5] + "output_cylindrical_lpb.png"

@@ -5,7 +5,6 @@ import os
 import sys
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 import math
 
 def help_message():
@@ -191,16 +190,6 @@ def Perspective_warping(img1, img2, img3):
     output_image = img1 # This is dummy output, change it to your output
     (pts1, pts2) = feature_matching(img1, img2)
 
-    # plt.subplot(121)
-    # plt.imshow(img1)
-    # x1,y1 = zip(*pts1)
-    # plt.scatter(x1,y1, 0.5, c='r', marker='x')
-    #
-    # x2,y2 = zip(*pts2)
-    # plt.subplot(122)
-    # plt.imshow(img2)
-    # plt.scatter(x2,y2, 0.5, c='r', marker='x')
-
     # Since we are stitching the images, we need to create a larger image to make room for all 3 images
     img1= cv2.copyMakeBorder(img1, 200,200,500,500, cv2.BORDER_CONSTANT)
 
@@ -208,36 +197,44 @@ def Perspective_warping(img1, img2, img3):
     (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1, method= 'homography')
     (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1, method='homography')
 
-
     # We need to transform image 2 and image 3 to the perspective of image 1
     cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]),dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
     cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
-
-
-
-    # # for example: transform im1 to im2's plane
-    # # first, make some room around im2
-    # img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
-    # # then transform im1 with the 3x3 transformation matrix
-    # # out = cv2.warpPerspective(img2, M,
-    # #                           (img2.shape[1], img1.shape[0]), dst=img1.copy(), borderMode=cv2.BORDER_TRANSPARENT)
-    # imageA =img1
-    # imageB =img2
-    # result = cv2.warpPerspective(imageA, M,
-    #                              (imageA.shape[1] + imageB.shape[1], imageA.shape[0]))
-    # result[0:imageB.shape[0], 0:imageB.shape[1]] = imageB
-
 
     output_image = img1
     # Write out the result
     output_name = sys.argv[5] + "output_homography.png"
     cv2.imwrite(output_name, output_image)
+
+    # print new_RMSD(1, output_image, cv2.imread('example_output1.png', 0))
+
     return True
 
 def Bonus_perspective_warping(img1, img2, img3):
 
     # Write your codes here
     output_image = img1 # This is dummy output, change it to your output
+
+    # Write your codes here
+    def display_image(title, img):
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL)  # Create window with freedom of dimensions
+        cv2.imshow(title, img)
+
+    output_image = img1  # This is dummy output, change it to your output
+    (pts1, pts2) = feature_matching(img1, img2)
+
+    # Since we are stitching the images, we need to create a larger image to make room for all 3 images
+    img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
+
+    # We need to transform image 2 and image 3 to plane of image 1
+    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1, method='homography')
+    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1, method='homography')
+
+    # We need to transform image 2 and image 3 to the perspective of image 1
+    cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]), dst=img1, borderMode=cv2.BORDER_TRANSPARENT)
+
+    
+    cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst=img1, borderMode=cv2.BORDER_TRANSPARENT)
 
     # Write out the result
     output_name = sys.argv[5] + "output_homography_lpb.png"
@@ -247,7 +244,7 @@ def Bonus_perspective_warping(img1, img2, img3):
 
 def get_cylindrical_image(img):
     height,width = img.shape
-    f = 700
+    f = 413
     K = np.array([[f, 0, width/2], [0, f, height/2], [0, 0, 1]])
     return  cylindricalWarpImage(img, K)
 
@@ -282,23 +279,25 @@ def Cylindrical_warping(img1, img2, img3):
 
     output_image = img1 # This is dummy output, change it to your output
 
-
     img1, mask1 = get_cylindrical_image(img1)
     img2, mask2 = get_cylindrical_image(img2)
     img3, mask3 = get_cylindrical_image(img3)
 
     img1 = cv2.copyMakeBorder(img1, 50, 50, 300, 300, cv2.BORDER_CONSTANT)
 
-    display_image('out1', stitch(img2, mask2, img1))
-    display_image('out2', stitch(img3, mask3, stitch(img2,mask2, img1)))
-    cv2.waitKey(0)
+    # display_image('out1', stitch(img2, mask2, img1))
+    # display_image('out2', stitch(img3, mask3, stitch(img2,mask2, img1)))
+    # cv2.waitKey(0)
 
-    output_image = stitch(img3,mask3, stitch(img2,mask2, img1))
-    # Write out the result
+    first_stitch = stitch(img2, mask2, img1)
+    output_image = stitch(img3, mask3, first_stitch)
+    # display_image('first_stitch',first_stitch)
+    # display_image('output', output_image)
+    # cv2.waitKey(0)
+    # # Write out the result
     output_name = sys.argv[5] + "output_cylindrical.png"
     cv2.imwrite(output_name, output_image)
-
-
+    print new_RMSD(2, output_image, cv2.imread('example_output2.png', 0))
     return True
 
 def Bonus_cylindrical_warping(img1, img2, img3):
@@ -342,6 +341,42 @@ def RMSD(target, master):
 
         return total_diff;
 
+def new_RMSD(questionID, target, master):
+    # Get width, height, and number of channels of the master image
+    master_height, master_width = master.shape[:2]
+    master_channel = len(master.shape)
+
+    # Get width, height, and number of channels of the target image
+    target_height, target_width = target.shape[:2]
+    target_channel = len(target.shape)
+
+    # Validate the height, width and channels of the input image
+    if (master_height != target_height or master_width != target_width or master_channel != target_channel):
+        return -1
+    else:
+        nonZero_target = cv2.countNonZero(target)
+        nonZero_master = cv2.countNonZero(master)
+
+        if (questionID == 1):
+           if (nonZero_target < 1200000):
+               return -1
+        elif(questionID == 2):
+            if (nonZero_target < 700000):
+                return -1
+        else:
+            return -1
+
+        total_diff = 0.0;
+        master_channels = cv2.split(master);
+        target_channels = cv2.split(target);
+
+        for i in range(0, len(master_channels), 1):
+            dst = cv2.absdiff(master_channels[i], target_channels[i])
+            dst = cv2.pow(dst, 2)
+            mean = cv2.mean(dst)
+            total_diff = total_diff + mean[0]**(1/2.0)
+
+        return total_diff;
 if __name__ == '__main__':
    question_number = -1
    

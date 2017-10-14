@@ -22,6 +22,50 @@ def help_message():
    print("Example usages:")
    print(sys.argv[0] + " 1 " + "[path to input image1] " + "[path to input image2] " + "[path to input image3] " + "[output directory]")
 
+def Laplacian_Pyramid_Blending_with_mask(A, B, m, num_levels = 6):
+    # assume mask is float32 [0,1]
+    # generate Gaussian pyramid for A,B and mask
+    GA = A.copy()
+    GB = B.copy()
+    GM = m.copy()
+    gpA = [GA]
+    gpB = [GB]
+    gpM = [GM]
+    for i in xrange(num_levels):
+        GA = cv2.pyrDown(GA)
+        GB = cv2.pyrDown(GB)
+        GM = cv2.pyrDown(GM)
+        gpA.append(np.float32(GA))
+        gpB.append(np.float32(GB))
+        gpM.append(np.float32(GM))
+
+    # generate Laplacian Pyramids for A,B and masks
+    lpA  = [gpA[num_levels-1]] # the bottom of the Lap-pyr holds the last (smallest) Gauss level
+    lpB  = [gpB[num_levels-1]]
+    gpMr = [gpM[num_levels-1]]
+    for i in xrange(num_levels-1,0,-1):
+        # Laplacian: subtarct upscaled version of lower level from current level
+        # to get the high frequencies
+        LA = np.subtract(gpA[i-1], cv2.pyrUp(gpA[i]))
+        LB = np.subtract(gpB[i-1], cv2.pyrUp(gpB[i]))
+        lpA.append(LA)
+        lpB.append(LB)
+        gpMr.append(gpM[i-1]) # also reverse the masks
+
+    # Now blend images according to mask in each level
+    LS = []
+    for la,lb,gm in zip(lpA,lpB,gpMr):
+        ls = la * gm + lb * (1.0 - gm)
+        LS.append(ls)
+
+    # now reconstruct
+    ls_ = LS[0]
+    for i in xrange(1,num_levels):
+        ls_ = cv2.pyrUp(ls_)
+        ls_ = cv2.add(ls_, LS[i])
+
+    return ls_
+
 '''
 Detect, extract and match features between img1 and img2.
 Using SIFT as the detector/extractor, but this is inconsequential to the user.
@@ -137,6 +181,7 @@ def cylindricalWarpImage(img1, K, savefig=False):
 
     return (cyl,cyl_mask)
 
+
 '''
 Calculate the geometric transform (only affine or homography) between two images,
 based on feature matching and alignment with a robust estimator (RANSAC).
@@ -208,36 +253,45 @@ def Perspective_warping(img1, img2, img3):
     (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1, method= 'homography')
     (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1, method='homography')
 
-
     # We need to transform image 2 and image 3 to the perspective of image 1
     cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]),dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
     cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
-
-
-
-    # # for example: transform im1 to im2's plane
-    # # first, make some room around im2
-    # img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
-    # # then transform im1 with the 3x3 transformation matrix
-    # # out = cv2.warpPerspective(img2, M,
-    # #                           (img2.shape[1], img1.shape[0]), dst=img1.copy(), borderMode=cv2.BORDER_TRANSPARENT)
-    # imageA =img1
-    # imageB =img2
-    # result = cv2.warpPerspective(imageA, M,
-    #                              (imageA.shape[1] + imageB.shape[1], imageA.shape[0]))
-    # result[0:imageB.shape[0], 0:imageB.shape[1]] = imageB
-
 
     output_image = img1
     # Write out the result
     output_name = sys.argv[5] + "output_homography.png"
     cv2.imwrite(output_name, output_image)
+    # print new_RMSD(1, output_image, cv2.imread('Input/example_output1.png', 0))
     return True
 
 def Bonus_perspective_warping(img1, img2, img3):
 
     # Write your codes here
+    def display_image(title, img):
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL)  # Create window with freedom of dimensions
+        cv2.imshow(title, img)
+
+    # Write your codes here
     output_image = img1 # This is dummy output, change it to your output
+
+    img1 = cv2.copyMakeBorder(img1, 200, 200, 500, 500, cv2.BORDER_CONSTANT)
+
+    # We need to transform image 2 and image 3 to plane of image 1
+    (Mright, pts1right, pts2right, maskright) = getTransform(img2, img1, method= 'homography')
+    (Mleft, pts1left, pts2left, maskleft) = getTransform(img3, img1, method='homography')
+
+    # We need to transform image 2 and image 3 to the perspective of image 1
+    cv2.warpPerspective(img2, Mright, (img1.shape[1], img1.shape[0]),dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
+
+    mask = np.zeros_like(img1, dtype='float32')
+    mask[:, img1.shape[1] / 4:] = 1
+    print img1[:, img1.shape[1] / 2:].shape
+    print img1[:, :img1.shape[1] / 2].shape
+    print mask.shape
+    output_l = Laplacian_Pyramid_Blending_with_mask(img1[:, img1.shape[1] / 2:], img1[:, :img1.shape[1] / 2], mask, num_levels=2)
+    display_image("behold the blended output", output_l)
+    cv2.warpPerspective(img3, Mleft, (img1.shape[1], img1.shape[0]), dst = img1, borderMode =cv2.BORDER_TRANSPARENT)
+
 
     # Write out the result
     output_name = sys.argv[5] + "output_homography_lpb.png"
@@ -247,7 +301,7 @@ def Bonus_perspective_warping(img1, img2, img3):
 
 def get_cylindrical_image(img):
     height,width = img.shape
-    f = 700
+    f = 417
     K = np.array([[f, 0, width/2], [0, f, height/2], [0, 0, 1]])
     return  cylindricalWarpImage(img, K)
 
@@ -274,11 +328,9 @@ def Cylindrical_warping(img1, img2, img3):
                                                 M,
                                                 (image2.shape[1], image2.shape[0]),
                                                 )
-
         output_image = image2.copy()
         output_image[image_transformed_mask != 0] = image_transformed[image_transformed_mask != 0]
         return output_image
-
 
     output_image = img1 # This is dummy output, change it to your output
 
@@ -289,16 +341,12 @@ def Cylindrical_warping(img1, img2, img3):
 
     img1 = cv2.copyMakeBorder(img1, 50, 50, 300, 300, cv2.BORDER_CONSTANT)
 
-    display_image('out1', stitch(img2, mask2, img1))
-    display_image('out2', stitch(img3, mask3, stitch(img2,mask2, img1)))
-    cv2.waitKey(0)
-
-    output_image = stitch(img3,mask3, stitch(img2,mask2, img1))
+    output_image = stitch(img3, mask3, stitch(img2,mask2, img1))
     # Write out the result
     output_name = sys.argv[5] + "output_cylindrical.png"
     cv2.imwrite(output_name, output_image)
 
-
+    # print new_RMSD(2, output_image, cv2.imread('Input/example_output2.png', 0))
     return True
 
 def Bonus_cylindrical_warping(img1, img2, img3):
@@ -330,6 +378,44 @@ def RMSD(target, master):
     if (master_height != target_height or master_width != target_width or master_channel != target_channel):
         return -1
     else:
+        total_diff = 0.0;
+        master_channels = cv2.split(master);
+        target_channels = cv2.split(target);
+
+        for i in range(0, len(master_channels), 1):
+            dst = cv2.absdiff(master_channels[i], target_channels[i])
+            dst = cv2.pow(dst, 2)
+            mean = cv2.mean(dst)
+            total_diff = total_diff + mean[0]**(1/2.0)
+
+        return total_diff;
+
+
+def new_RMSD(questionID, target, master):
+    # Get width, height, and number of channels of the master image
+    master_height, master_width = master.shape[:2]
+    master_channel = len(master.shape)
+
+    # Get width, height, and number of channels of the target image
+    target_height, target_width = target.shape[:2]
+    target_channel = len(target.shape)
+
+    # Validate the height, width and channels of the input image
+    if (master_height != target_height or master_width != target_width or master_channel != target_channel):
+        return -1
+    else:
+        nonZero_target = cv2.countNonZero(target)
+        nonZero_master = cv2.countNonZero(master)
+
+        if (questionID == 1):
+           if (nonZero_target < 1200000):
+               return -1
+        elif(questionID == 2):
+            if (nonZero_target < 700000):
+                return -1
+        else:
+            return -1
+
         total_diff = 0.0;
         master_channels = cv2.split(master);
         target_channels = cv2.split(target);

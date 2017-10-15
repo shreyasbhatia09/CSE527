@@ -54,6 +54,7 @@ def resample(weights):
 
 
 def draw_on_image(ret, frame):
+
     #find four vertices of the rectangle from ret
     pt = cv2.boxPoints(ret)
     # round them to integers
@@ -65,6 +66,18 @@ def draw_on_image(ret, frame):
         color = 255,
         thickness = 2
     )
+    cv2.imshow('img', img)
+    k = cv2.waitKey(60) & 0xff
+    if k == 27:
+        return
+
+def display_particle_filter(frame, particle):
+
+    pt = np.int0(np.around(particle))
+    for pt in particle:
+        img = cv2.circle(frame, (pt[0],pt[1]), 1, (0, 255, 0), -1)
+    # img = cv2.rectangle(frame, (c, r), (c + w, r + h), 255, 2)
+
     cv2.imshow('img', img)
     k = cv2.waitKey(60) & 0xff
     if k == 27:
@@ -120,7 +133,7 @@ def skeleton_tracker(v, file_name):
     output.close()
 
 
-def particle_filter_tracker(v, file_name):
+def kalman_filter_tracker(v, file_name):
     # Open output file
     output_name = sys.argv[3] + file_name
     output = open(output_name,"w")
@@ -145,9 +158,23 @@ def particle_filter_tracker(v, file_name):
     # NOTE: you do not need this in the Kalman, Particle or OF trackers
     roi_hist = hsv_histogram_for_window(frame, (c,r,w,h)) # this is provided for you
 
+
     # initialize the tracker
     # e.g. kf = cv2.KalmanFilter(4,2,0)
     # or: particles = np.ones((n_particles, 2), int) * initial_pos
+
+    kalman = cv2.KalmanFilter(4,2,0)
+
+    state = np.array([c + w / 2, r + h / 2, 0, 0], dtype='float64')  # initial position
+    kalman.transitionMatrix = np.array([[1., 0., .1, 0.],
+                                        [0., 1., 0., .1],
+                                        [0., 0., 1., 0.],
+                                        [0., 0., 0., 1.]])
+    kalman.measurementMatrix = 1. * np.eye(2, 4)
+    kalman.processNoiseCov = 1e-5 * np.eye(4, 4)
+    kalman.measurementNoiseCov = 1e-3 * np.eye(2, 2)
+    kalman.errorCovPost = 1e-1 * np.eye(4, 4)
+    kalman.statePost = state
 
     while(1):
         ret ,frame = v.read() # read another frame
@@ -155,7 +182,106 @@ def particle_filter_tracker(v, file_name):
             break
 
         # perform the tracking
+        # e.g. cv2.meanS    hift, cv2.CamShift, or kalman.predict(), kalman.correct()
+
+        # use the tracking result to get the tracking point (pt):
+        # if you track a rect (e.g. face detector) take the mid point,
+        # if you track particles - take the weighted average
+        # the Kalman filter already has the tracking point in the state vector
+
+        prediction = kalman.predict()
+
+        # ...
+        # obtain measurement
+
+        measurement += np.dot(kalman.measurementMatrix, state)
+
+        if measurement_valid:  # e.g. face found
+            global measurement
+            c, r, w, h = detect_one_face(frame)
+            # ...
+
+            posterior = kalman.correct(measurement)
+
+        # use prediction or posterior as your tracking result
+
+        # write the result to the output file
+        #output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
+        frameCounter = frameCounter + 1
+
+    output.close()
+
+
+
+def particle_filter_tracker(v, file_name):
+
+    def particleevaluator(back_proj, particle):
+        return back_proj[particle[1], particle[0]]
+
+    # Open output file
+    output_name = sys.argv[3] + file_name
+    output = open(output_name,"w")
+
+    frameCounter = 0
+    # read first frame
+    ret ,frame = v.read()
+    if ret == False:
+        return
+
+    # detect face in first frame
+    c,r,w,h = detect_one_face(frame)
+    n_particles = 1500
+    init_pos = np.array([c + w / 2.0, r + h / 2.0], int)
+
+    hist = hsv_histogram_for_window(frame, (c,r,w,h) )
+    frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    frame_dst = cv2.calcBackProject([frame_hsv], [0], hist, [0, 180], 1)
+    particles = np.ones((n_particles, 2), int) * init_pos
+    f0 = particleevaluator(frame_dst, particles.T) * np.ones(n_particles)
+    weights = np.ones(n_particles) / n_particles
+
+    # Write track point for first frame
+    # output.write("%d,%d,%d\n" % pt) # Write as 0,pt_x,pt_y
+    frameCounter = frameCounter + 1
+
+    # set the initial tracking window
+    track_window = (c,r,w,h)
+
+    # calculate the HSV histogram in the window
+    # NOTE: you do not need this in the Kalman, Particle or OF trackers
+    roi_hist = hsv_histogram_for_window(frame, (c,r,w,h)) # this is provided for you
+
+    # initialize the tracker
+    # e.g. kf = cv2.KalmanFilter(4,2,0)
+    # or: particles = np.ones((n_particles, 2), int) * initial_pos
+    stepsize = 3
+    while(1):
+        ret ,frame = v.read() # read another frame
+        if not ret:
+            break
+
+        # perform the tracking
         # e.g. cv2.meanShift, cv2.CamShift, or kalman.predict(), kalman.correct()
+
+        # Particle motion model: uniform step (TODO: find a better motion model)
+        np.add(particles, np.random.uniform(-stepsize, stepsize, particles.shape), out=particles, casting="unsafe")
+
+        # Clip out-of-bounds particles
+        particles = particles.clip(np.zeros(2), np.array((frame.shape[0], frame.shape[1])) - 1).astype(int)
+
+        frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        frame_dst = cv2.calcBackProject([frame_hsv], [0], hist, [0, 180], 1)
+
+        f = particleevaluator(frame_dst, particles.T)  # Evaluate particles
+        weights = np.float32(f.clip(1))  # Weight ~ histogram response
+        weights /= np.sum(weights)  # Normalize w
+        pos = np.sum(particles.T * weights, axis=1).astype(int)  # expected position: weighted average
+
+        if 1. / np.sum(weights ** 2) < n_particles / 2.:  # If particle cloud degenerate:
+            particles = particles[resample(weights), :]  # Resample particles according to weights
+
+        display_particle_filter(frame, particles)
+        weights = resample(weights)
 
         # use the tracking result to get the tracking point (pt):
         # if you track a rect (e.g. face detector) take the mid point,
@@ -163,7 +289,7 @@ def particle_filter_tracker(v, file_name):
         # the Kalman filter already has the tracking point in the state vector
 
         # write the result to the output file
-        output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
+        # output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
         frameCounter = frameCounter + 1
 
     output.close()
@@ -249,7 +375,7 @@ if __name__ == '__main__':
     elif (question_number == 2):
         particle_filter_tracker(video, "output_particle.txt")
     elif (question_number == 3):
-        skeleton_tracker(video, "output_kalman.txt")
+        kalman_filter_tracker(video, "output_kalman.txt")
     elif question_number == 4:
         skeleton_tracker(video, "output_of.txt")
 

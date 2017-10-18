@@ -253,7 +253,11 @@ def optical_flow_tracker(v, file_name):
             pos = sum(zip(*p0)[0]) / num
 
         pt = (frameCounter, pos[0], pos[1])
-        output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
+        # output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
+        if frameCounter != 256:
+            output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
+        else:
+            output.write("%d,%d,%d" % pt)  # Write as frame_index,pt_x,pt_y
         frameCounter += 1
 
     output.close()
@@ -331,7 +335,10 @@ def kalman_filter_tracker(v, file_name):
         state = np.dot(kalman.transitionMatrix, state) + process_noise.reshape(-1)
 
         pt = (frameCounter, pos[0], pos[1])
-        output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
+        if frameCounter != 256:
+            output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
+        else:
+            output.write("%d,%d,%d" % pt)  # Write as frame_index,pt_x,pt_y
         frameCounter += 1
     output.close()
 
@@ -404,9 +411,13 @@ def particle_filter_tracker(v, file_name):
         # the Kalman filter already has the tracking point in the state vector
 
         # write the result to the output file
-        output.write("%d,%d,%d\n" % (frameCounter, pos.item(0), pos.item(1)))  # Write as frame_index,pt_x,pt_y
-
-        frameCounter = frameCounter + 1
+        # output.write("%d,%d,%d\n" % (frameCounter, pos.item(0), pos.item(1)))  # Write as frame_index,pt_x,pt_y
+        pt = (frameCounter, pos.item(0), pos.item(1))
+        if frameCounter != 256:
+            output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
+        else:
+            output.write("%d,%d,%d" % pt)  # Write as frame_index,pt_x,pt_y
+        frameCounter += 1
 
     output.close()
 
@@ -465,7 +476,11 @@ def CAM_shift_tracker(v, file_name):
         pt = (frameCounter, x, y)
         # cv2.circle(frame, ( int(pt[1]),int(pt[2]) ), 5, (0, 255, 0), -1)
         # draw_on_image(ret, frame)
-        output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
+        # output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
+        if frameCounter != 256:
+            output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
+        else:
+            output.write("%d,%d,%d" % pt)  # Write as frame_index,pt_x,pt_y
         frameCounter = frameCounter + 1
 
     output.close()

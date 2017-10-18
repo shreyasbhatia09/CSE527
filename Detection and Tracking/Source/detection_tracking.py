@@ -83,6 +83,7 @@ def display_particle_filter(frame, particle):
     if k == 27:
         return
 
+
 def display_kalman2(frame, pos):
     pt = np.int0(np.around(pos))
     img = cv2.circle(frame, (pt[0], pt[1]), 10, (0, 255, 0), -1)
@@ -91,6 +92,7 @@ def display_kalman2(frame, pos):
     k = cv2.waitKey(60) & 0xff
     if k == 27:
         return
+
 
 def display_kalman3(frame, pos, ret):
     pt = np.int0(np.around(pos))
@@ -103,6 +105,15 @@ def display_kalman3(frame, pos, ret):
 
     cv2.imshow('img', frame)
     k = cv2.waitKey(60) & 0xff
+    if k == 27:
+        return
+
+def display_of(frame , mask, pos):
+
+    frame = cv2.circle(frame, (pos[0], pos[1]), 5)
+    img = cv2.add(frame, mask)
+    cv2.imshow('frame', img)
+    k = cv2.waitKey(30) & 0xff
     if k == 27:
         return
 
@@ -154,60 +165,49 @@ def skeleton_tracker(v, file_name):
 
     output.close()
 
+
 def optical_flow_tracker(v, file_name):
+
     # Open output file
     output_name = sys.argv[3] + file_name
     output = open(output_name, "w")
 
     frameCounter = 0
+
     # read first frame
     ret, frame = v.read()
-    if ret == False:
+    if not ret:
         return
 
-    # detect face in first frame
     c, r, w, h = detect_one_face(frame)
 
-    # Write track point for first frame
-    # output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
-    frameCounter = frameCounter + 1
-
-    # set the initial tracking window
-    track_window = (c, r, w, h)
-
-    # calculate the HSV histogram in the window
-    # NOTE: you do not need this in the Kalman, Particle or OF trackers
-    roi_hist = hsv_histogram_for_window(frame, (c, r, w, h))  # this is provided for you
-
-    # initialize the tracker
-    # e.g. kf = cv2.KalmanFilter(4,2,0)
-    # or: particles = np.ones((n_particles, 2), int) * initial_pos
-
-    # params for ShiTomasi corner detection
-    feature_params = dict(maxCorners=100,
-                          qualityLevel=0.3,
-                          minDistance=7,
-                          blockSize=7)
+    frameCounter += 1
 
     # Parameters for lucas kanade optical flow
-    lk_params = dict(winSize=(15, 15),
-                     maxLevel=2,
-                     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+    lk_params_winSize=(15, 15)
+    lk_params_maxLevel=2
+    lk_params_criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
 
-    # Create some random colors
-    color = np.random.randint(0, 255, (100, 3))
-
-    # Take first frame and find corners in it
     ret, old_frame = ret, frame
     old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
-    # p0 = cv2.goodFeaturesToTrack(old_gray[r:r+w+50, c:c+h+50], mask=None, **feature_params)
-    
-    # p0 = ((c+(c+w))/2, (r+(r+h))/2)
-    # Create a mask image for drawing purposes
-    mask = np.zeros_like(old_frame)
+
+    p0 = []
+    num = 8
+    for i in range(num - 1):
+        p0_temp = np.random.rand(1,2)*(w/2,h/2) + (c+w/4,r+h/4)
+        p0.append(p0_temp)
+
+    p0_temp = [[c+w/2, r+h/2]]
+    p0.append(p0_temp)
+    p0 = np.array(p0).astype('float32')
+
+    pt = (0, c + w/2, r + h/ 2)
+    output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
+
     while (1):
         ret, frame = v.read()  # read another frame
-        if ret == False:
+
+        if not ret:
             break
 
         # perform the tracking
@@ -221,7 +221,14 @@ def optical_flow_tracker(v, file_name):
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # calculate optical flow
-        p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+        p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray,
+                                               frame_gray,
+                                               p0,
+                                               None,
+                                               maxLevel = lk_params_maxLevel,
+                                               winSize = lk_params_winSize,
+                                               criteria = lk_params_criteria
+        )
 
         # Select good points
         good_new = p1[st == 1]
@@ -231,22 +238,23 @@ def optical_flow_tracker(v, file_name):
         for i, (new, old) in enumerate(zip(good_new, good_old)):
             a, b = new.ravel()
             c, d = old.ravel()
-            mask = cv2.line(mask, (a, b), (c, d), color[i].tolist(), 2)
-            frame = cv2.circle(frame, (a, b), 5, color[i].tolist(), -1)
-        img = cv2.add(frame, mask)
-
-        cv2.imshow('frame', img)
-        k = cv2.waitKey(30) & 0xff
-        if k == 27:
-            break
 
         # Now update the previous frame and previous points
         old_gray = frame_gray.copy()
+
         p0 = good_new.reshape(-1, 1, 2)
 
-        # write the result to the output file
-        # output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
-        frameCounter = frameCounter + 1
+        c, r, w, h = detect_one_face(frame)
+
+        # Use face detector else use optical flow
+        if w != 0 and h != 0:
+            pos = (c + w/2, r + h/2)
+        else:
+            pos = sum(zip(*p0)[0]) / num
+
+        pt = (frameCounter, pos[0], pos[1])
+        output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
+        frameCounter += 1
 
     output.close()
 
@@ -259,23 +267,16 @@ def kalman_filter_tracker(v, file_name):
     frameCounter = 0
     # read first frame
     ret, frame = v.read()
-    if ret == False:
+    if not ret:
         return
 
     # detect face in first frame
     c, r, w, h = detect_one_face(frame)
 
     # Write track point for first frame
-    pt = (0,   ((c + h) + c)  / 2, (r + (r + w)) / 2)
+    pt = (0,   c + w/2.0, r + h/2.0)
     output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
-    frameCounter = frameCounter + 1
-
-    # set the initial tracking window
-    track_window = (c, r, w, h)
-
-    # initialize the tracker
-    # e.g. kf = cv2.KalmanFilter(4,2,0)
-    # or: particles = np.ones((n_particles, 2), int) * initial_pos
+    frameCounter += 1
 
     kalman = cv2.KalmanFilter(4, 2, 0)
 
@@ -292,12 +293,11 @@ def kalman_filter_tracker(v, file_name):
     while (1):
         # use prediction or posterior as your tracking result
         ret, frame = v.read()  # read another frame
-        if ret == False:
+        if not ret:
             break
 
         img_width = frame.shape[0]
         img_height = frame.shape[1]
-        img = frame
 
         def calc_point(angle):
             return (np.around(img_width / 2 + img_width / 3 * np.cos(angle), 0).astype(int),
@@ -324,16 +324,15 @@ def kalman_filter_tracker(v, file_name):
         else:
             measurement = (np.dot(kalman.measurementNoiseCov, np.random.randn(2, 1))).reshape(-1)
             measurement = np.dot(kalman.measurementMatrix, state) + measurement
-            pos = prediction
             pos = (prediction[0], prediction[1])
 
-        display_kalman3(frame, pos, (c, r, w, h))
+        # display_kalman3(frame, pos, (c, r, w, h))
         process_noise = np.sqrt(kalman.processNoiseCov[0, 0]) * np.random.randn(4, 1)
         state = np.dot(kalman.transitionMatrix, state) + process_noise.reshape(-1)
-        frameCounter += 1
-        pt = (0, pos[0], pos[1])
-        output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
 
+        pt = (frameCounter, pos[0], pos[1])
+        output.write("%d,%d,%d\n" % pt) # Write as frame_index,pt_x,pt_y
+        frameCounter += 1
     output.close()
 
 
@@ -362,17 +361,10 @@ def particle_filter_tracker(v, file_name):
     particles = np.ones((n_particles, 2), int) * init_pos
     f0 = particleevaluator(frame_dst, init_pos) * np.ones(n_particles)
     weights = np.ones(n_particles) / n_particles
-    pt = (0, c + (c + h) / 2, r + (r + w) / 2)
+    pt = (0, c + w/2.0, r + h/ 2.0)
     # Write track point for first frame
     output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
     frameCounter = frameCounter + 1
-
-    # set the initial tracking window
-    track_window = (c, r, w, h)
-
-    # calculate the HSV histogram in the window
-    # NOTE: you do not need this in the Kalman, Particle or OF trackers
-    roi_hist = hsv_histogram_for_window(frame, (c, r, w, h))  # this is provided for you
 
     # initialize the tracker
     # e.g. kf = cv2.KalmanFilter(4,2,0)
@@ -413,6 +405,7 @@ def particle_filter_tracker(v, file_name):
 
         # write the result to the output file
         output.write("%d,%d,%d\n" % (frameCounter, pos.item(0), pos.item(1)))  # Write as frame_index,pt_x,pt_y
+
         frameCounter = frameCounter + 1
 
     output.close()
@@ -426,13 +419,13 @@ def CAM_shift_tracker(v, file_name):
     frameCounter = 0
     # read first frame
     ret, frame = v.read()
-    if ret == False:
+    if not ret:
         return
     # detect face in first frame
     c, r, w, h = detect_one_face(frame)
 
     # Write track point for first frame
-    pt = (0, (c + (c + h)) / 2, (r + (r + w)) / 2)
+    pt = (0, c + w/2.0, r + h/2.0)
     output.write("%d,%d,%d\n" % pt)  # Write as 0,pt_x,pt_y
     frameCounter = frameCounter + 1
 
@@ -465,10 +458,13 @@ def CAM_shift_tracker(v, file_name):
         # if you track particles - take the weighted average
         # the Kalman filter already has the tracking point in the state vector
 
-        # draw_on_image(ret, frame)
         # write the result to the output file
-        pt = (frameCounter, (ret[0][0] + ret[0][1]) / 2, (ret[1][0] + ret[1][1]) / 2)
-
+        pos = track_window
+        x =  pos[0] + pos[2]/2.0
+        y = pos[1]+ pos[3]/2.0
+        pt = (frameCounter, x, y)
+        # cv2.circle(frame, ( int(pt[1]),int(pt[2]) ), 5, (0, 255, 0), -1)
+        # draw_on_image(ret, frame)
         output.write("%d,%d,%d\n" % pt)  # Write as frame_index,pt_x,pt_y
         frameCounter = frameCounter + 1
 

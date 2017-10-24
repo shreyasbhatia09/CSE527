@@ -158,11 +158,11 @@ if __name__ == '__main__':
 
     mask = np.zeros_like(img)
     mask = segmask
-    cv2.imshow('image' , segmask)
+    cv2.imshow('image', segmask)
     cv2.waitKey(0)
-    master = cv2.imread('example_output.png', cv2.IMREAD_GRAYSCALE  )
+    master = cv2.imread('example_output.png', cv2.IMREAD_GRAYSCALE)
 
-    print RMSD(segmask, master)
+    # print RMSD(segmask, master)
     # ======================================== #
     # read video file
     output_name = sys.argv[3] + "mask.png"

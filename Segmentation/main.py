@@ -12,6 +12,7 @@ from skimage.segmentation import mark_boundaries
 from skimage.data import astronaut
 from skimage.util import img_as_float
 import maxflow
+import sys
 from scipy.spatial import Delaunay
 
 def help_message():
@@ -28,7 +29,8 @@ def help_message():
 # Calculate the SLIC superpixels, their histograms and neighbors
 def superpixels_histograms_neighbors(img):
     # SLIC
-    segments = slic(img, n_segments=500, compactness=20)
+    # 520 22
+    segments = slic(img, n_segments=520, compactness=22)
     segments_ids = np.unique(segments)
 
     # centers
@@ -133,16 +135,35 @@ if __name__ == '__main__':
         help_message()
         sys.exit()
 
-    img = cv2.imread(sys.argv[1], cv2.imread_color)
-    img_marking = cv2.imread(sys.argv[2], cv2.imread_color)
+    img = cv2.imread(sys.argv[1], cv2.IMREAD_COLOR )
+    img_marking = cv2.imread(sys.argv[2], cv2.IMREAD_COLOR )
 
     # ======================================== #
     # write all your codes here
 
-    mask = cv2.cvtcolor(img_marking, cv2.color_bgr2gray) # dummy assignment for mask, change it to your result
+    centers, color_hists, superpixels, neighbors = superpixels_histograms_neighbors(img)
 
+
+    fg_segments, bg_segments = find_superpixels_under_marking(img_marking, superpixels)
+
+    fg_cumulative_hist = cumulative_histogram_for_superpixels(fg_segments, color_hists)
+    bg_cumulative_hist = cumulative_histogram_for_superpixels(bg_segments, color_hists)
+
+    norm_hists = normalize_histograms(color_hists)
+
+    graph_cut = do_graph_cut((fg_cumulative_hist,bg_cumulative_hist), (fg_segments, bg_segments), norm_hists, neighbors)
+
+    segmask = pixels_for_segment_selection(superpixels, np.nonzero(graph_cut))
+    segmask = np.uint8(segmask * 255)
+
+    mask = np.zeros_like(img)
+    mask = segmask
+    cv2.imshow('image' , segmask)
+    cv2.waitKey(0)
+    master = cv2.imread('example_output.png', cv2.IMREAD_GRAYSCALE  )
+
+    print RMSD(segmask, master)
     # ======================================== #
-
     # read video file
     output_name = sys.argv[3] + "mask.png"
-    cv2.imwrite(output_name, mask);
+    cv2.imwrite(output_name, mask)

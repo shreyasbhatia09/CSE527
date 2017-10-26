@@ -15,6 +15,13 @@ import maxflow
 import sys
 from scipy.spatial import Delaunay
 
+# Global variables
+ldrawing = False # true if mouse is pressed
+mode = True # if True, draw rectangle. Press 'm' to toggle to curve
+ix,iy = -1,-1
+
+
+
 def help_message():
    print("Usage: [Input_Image] [Input_Marking] [Output_Directory]")
    print("[Input_Image]")
@@ -30,7 +37,18 @@ def help_message():
 def superpixels_histograms_neighbors(img):
     # SLIC
     # 520 22
-    segments = slic(img, n_segments=520, compactness=22)
+    # 500 23 - 6.73
+    # 500 23.11 - 6.70
+
+    # segments = slic(img,n_segments=500, compactness=23)
+    segments = slic(img,
+                n_segments = 500,
+                compactness = 23.11,
+                max_iter = 10, sigma = 0, spacing = None, multichannel = True,
+                convert2lab = None, enforce_connectivity = True, min_size_factor = 0.5,
+                max_size_factor = 10,
+                slic_zero = False)
+
     segments_ids = np.unique(segments)
 
     # centers
@@ -131,7 +149,7 @@ def RMSD(target, master):
 if __name__ == '__main__':
    
     # validate the input arguments
-    if (len(sys.argv) != 4):
+    if len(sys.argv) != 4:
         help_message()
         sys.exit()
 
@@ -161,8 +179,7 @@ if __name__ == '__main__':
     cv2.imshow('image', segmask)
     cv2.waitKey(0)
     master = cv2.imread('example_output.png', cv2.IMREAD_GRAYSCALE)
-
-    # print RMSD(segmask, master)
+    print RMSD(segmask, master)
     # ======================================== #
     # read video file
     output_name = sys.argv[3] + "mask.png"

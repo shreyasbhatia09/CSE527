@@ -42,12 +42,14 @@ def superpixels_histograms_neighbors(img):
 
     # segments = slic(img,n_segments=500, compactness=23)
     segments = slic(img,
-                n_segments = 500,
+                n_segments = 500 ,
                 compactness = 23.11,
                 max_iter = 10, sigma = 0, spacing = None, multichannel = True,
                 convert2lab = None, enforce_connectivity = True, min_size_factor = 0.5,
                 max_size_factor = 10,
                 slic_zero = False)
+
+
 
     segments_ids = np.unique(segments)
 
@@ -176,10 +178,10 @@ if __name__ == '__main__':
 
     mask = np.zeros_like(img)
     mask = segmask
-    cv2.imshow('image', segmask)
-    cv2.waitKey(0)
-    master = cv2.imread('example_output.png', cv2.IMREAD_GRAYSCALE)
-    print RMSD(segmask, master)
+    # cv2.imshow('image', segmask)
+    # cv2.waitKey(0)
+    # master = cv2.imread('example_output.png', cv2.IMREAD_GRAYSCALE)
+    # print RMSD(segmask, master)
     # ======================================== #
     # read video file
     output_name = sys.argv[3] + "mask.png"

@@ -15,8 +15,9 @@ import maxflow
 import sys
 from scipy.spatial import Delaunay
 
-np.seterr(divide='ignore')
+import numpy as np
 
+np.seterr(divide='ignore', invalid='ignore')
 
 def help_message():
     print("Usage: [Input_Image] [Input_Marking] [Output_Directory]")
@@ -34,11 +35,11 @@ def superpixels_histograms_neighbors(img):
     # SLIC
     # 520 22
     # 500 23.11
-
+    # 445 16.63
     segments = slic(img,
-                n_segments = 500,
-                compactness = 23.11,
-                )
+                    n_segments=520,
+                    compactness=23.67,
+    )
 
     segments_ids = np.unique(segments)
 
@@ -211,7 +212,9 @@ if __name__ == '__main__':
 
     img = cv2.imread(sys.argv[1], cv2.IMREAD_COLOR)
     img_marking = cv2.imread(sys.argv[2], cv2.IMREAD_COLOR)
-    img_marking = create_mask(img)
+    img_marking2 = create_mask(img)
+
+
     # ======================================== #
     # write all your codes here
 
